@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface TodoItemProps {
   id: number;
@@ -13,55 +13,67 @@ const TodoItem: React.FC<TodoItemProps> = ({ id, text, completed, onDelete, onTo
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(text);
 
+  // Update editText when text prop changes
+  useEffect(() => {
+    setEditText(text);
+  }, [text]);
+
   const handleEdit = () => {
-    onEdit(id, editText);
-    setIsEditing(false);
+    if (editText.trim() !== '') {
+      onEdit(id, editText);
+      setIsEditing(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleEdit();
+    }
   };
 
   return (
-    <div className={`todo-item ${completed ? 'completed' : ''}`} style={{ display: 'flex', alignItems: 'center', margin: '10px 0', padding: '15px', borderRadius: '8px' }}>
-      <input
-        type="checkbox"
-        checked={completed}
-        onChange={() => onToggle(id)}
-        style={{ marginRight: '15px', width: '20px', height: '20px', accentColor: '#4f46e5' }}
-      />
-      
+    <div className={`todo-item ${completed ? 'completed' : ''} ${isEditing ? 'editing' : ''}`}>
       {isEditing ? (
-        <div style={{ display: 'flex', flex: 1, gap: '10px' }}>
+        <div className="edit-container">
           <input
             type="text"
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            style={{ flex: 1 }}
+            onKeyPress={handleKeyPress}
             autoFocus
           />
-          <button onClick={handleEdit} className="save-button" style={{ padding: '8px 16px', color: 'white', border: 'none', borderRadius: '6px' }}>Save</button>
-          <button onClick={() => setIsEditing(false)} className="cancel-button" style={{ padding: '8px 16px', color: 'white', border: 'none', borderRadius: '6px' }}>Cancel</button>
+          <div className="action-buttons">
+            <button onClick={handleEdit} className="save-button">Save</button>
+            <button onClick={() => setIsEditing(false)} className="cancel-button">Cancel</button>
+          </div>
         </div>
       ) : (
         <>
-          <span style={{ 
-            flex: 1, 
-            textDecoration: completed ? 'line-through' : 'none',
-            fontSize: '1.1rem',
-            color: completed ? '#6b7280' : '#1f2937',
-            fontWeight: completed ? 'normal' : '500'
-          }}>
-            {text}
-          </span>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="todo-item-content">
+            <input
+              type="checkbox"
+              checked={completed}
+              onChange={() => onToggle(id)}
+              style={{ width: '20px', height: '20px', accentColor: '#4f46e5', flexShrink: 0 }}
+            />
+            <span className="todo-text" style={{ 
+              textDecoration: completed ? 'line-through' : 'none',
+              color: completed ? '#6b7280' : '#1f2937',
+              fontWeight: completed ? 'normal' : '500'
+            }}>
+              {text}
+            </span>
+          </div>
+          <div className="action-buttons">
             <button 
               onClick={() => setIsEditing(true)} 
               className="edit-button"
-              style={{ padding: '8px 16px', color: 'white', border: 'none', borderRadius: '6px' }}
             >
               Edit
             </button>
             <button 
               onClick={() => onDelete(id)} 
               className="delete-button"
-              style={{ padding: '8px 16px', color: 'white', border: 'none', borderRadius: '6px' }}
             >
               Delete
             </button>

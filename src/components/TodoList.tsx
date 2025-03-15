@@ -1,60 +1,131 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TodoItem from './TodoItem';
-
-interface Todo {
-  id: number;
-  text: string;
-  completed: boolean;
-}
+import { fetchTodos, addTodo as apiAddTodo, deleteTodo as apiDeleteTodo, toggleTodo as apiToggleTodo, updateTodo as apiUpdateTodo, Todo } from '../services/api';
+import { supabase } from '../lib/supabase';
 
 const TodoList: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [inputText, setInputText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const addTodo = () => {
+  // Fetch todos on component mount and set up real-time subscription
+  useEffect(() => {
+    const loadTodos = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchTodos();
+        setTodos(data);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load todos. Please try again later.');
+        console.error('Error loading todos:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTodos();
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('todos-channel')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'todos' 
+      }, (payload) => {
+        console.log('Change received!', payload);
+        loadTodos(); // Reload todos when changes occur
+      })
+      .subscribe();
+
+    // Clean up subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const addTodo = async () => {
     if (inputText.trim() !== '') {
-      const newTodo: Todo = {
-        id: Date.now(),
-        text: inputText,
-        completed: false
-      };
-      setTodos([...todos, newTodo]);
-      setInputText('');
+      try {
+        const newTodo = await apiAddTodo(inputText);
+        setTodos([...todos, newTodo]);
+        setInputText('');
+      } catch (err) {
+        setError('Failed to add todo. Please try again.');
+        console.error('Error adding todo:', err);
+      }
     }
   };
 
-  const deleteTodo = (id: number) => {
-    setTodos(todos.filter(todo => todo.id !== id));
+  const deleteTodo = async (id: number) => {
+    try {
+      await apiDeleteTodo(id);
+      setTodos(todos.filter(todo => todo.id !== id));
+    } catch (err) {
+      setError('Failed to delete todo. Please try again.');
+      console.error('Error deleting todo:', err);
+    }
   };
 
-  const toggleTodo = (id: number) => {
-    setTodos(
-      todos.map(todo =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      )
-    );
+  const toggleTodo = async (id: number) => {
+    try {
+      const updatedTodo = await apiToggleTodo(id);
+      setTodos(
+        todos.map(todo =>
+          todo.id === id ? updatedTodo : todo
+        )
+      );
+    } catch (err) {
+      setError('Failed to update todo. Please try again.');
+      console.error('Error toggling todo:', err);
+    }
   };
 
-  const editTodo = (id: number, newText: string) => {
-    setTodos(
-      todos.map(todo =>
-        todo.id === id ? { ...todo, text: newText } : todo
-      )
-    );
+  const editTodo = async (id: number, newText: string) => {
+    try {
+      const updatedTodo = await apiUpdateTodo(id, newText);
+      setTodos(
+        todos.map(todo =>
+          todo.id === id ? updatedTodo : todo
+        )
+      );
+    } catch (err) {
+      setError('Failed to update todo. Please try again.');
+      console.error('Error editing todo:', err);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      addTodo();
+    }
   };
 
   return (
     <div className="todo-list">
       <h1>Todo List</h1>
       
-      <div style={{ display: 'flex', marginBottom: '20px', gap: '10px' }}>
+      {error && (
+        <div style={{ 
+          padding: '10px', 
+          backgroundColor: '#fee2e2', 
+          color: '#b91c1c', 
+          borderRadius: '6px',
+          marginBottom: '15px'
+        }}>
+          {error}
+        </div>
+      )}
+      
+      <div className="add-task-container">
         <input
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="Add a new task..."
-          style={{ flex: 1 }}
-          onKeyPress={(e) => e.key === 'Enter' && addTodo()}
+          onKeyPress={handleKeyPress}
         />
         <button 
           onClick={addTodo}
@@ -65,7 +136,11 @@ const TodoList: React.FC = () => {
       </div>
 
       <div>
-        {todos.length === 0 ? (
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            Loading todos...
+          </div>
+        ) : todos.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
             color: '#6b7280', 
@@ -78,7 +153,7 @@ const TodoList: React.FC = () => {
             <p>Add a new task to get started!</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div>
             {todos.map(todo => (
               <TodoItem
                 key={todo.id}
